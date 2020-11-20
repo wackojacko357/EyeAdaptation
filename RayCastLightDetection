@@ -1,0 +1,52 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+
+[ExecuteInEditMode]
+public class RayCastLightDetection : MonoBehaviour
+{
+    public GameObject spotLight;
+    public GameObject player;
+    public float range;
+    public Text text;
+
+    void Start()
+    {
+        spotLight = GameObject.Find("Spot Light");
+        player = GameObject.FindGameObjectWithTag("Player");
+    }
+
+    void Update()
+    {
+        RaycastHit hit;
+
+        Ray playerUnderLight = new Ray(transform.position, Vector3.down);
+
+        Debug.DrawRay(transform.position, Vector3.down * range);
+
+        if (Physics.Raycast(playerUnderLight, out hit, range))
+        {
+            if (hit.collider.tag == "Player")
+            {
+                spotLight.GetComponent<Light>().intensity = 6f;
+
+                Debug.Log("Player under Light!");
+
+                text.text = "Player under light!";
+                text.color = new Color(1, 1, 1);
+            }
+            else
+            {
+                spotLight.GetComponent<Light>().intensity = 2f;
+
+                Debug.Log("Player out of light!");
+
+                text.text = "Player not in light!";
+                text.color = new Color(0, 0, 0);
+            }
+        }
+
+    }
+}
