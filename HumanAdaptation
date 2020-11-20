@@ -1,0 +1,111 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+//Used to see in realtime (Only in unity edit mode).
+[ExecuteInEditMode]
+public class HumanAdaption : MonoBehaviour
+{
+	//Create the shader.
+	public Shader Shader;
+
+	public int initSampling = 256; //Set to 256 (8 x 16 = 256).
+	public float adaptationRate = 0.01f; //Changes Adaptation.
+	public float Key = 0.5f, White = 0.5f, maxLimit = 0.02f; //Amount of light.
+	public int luminanceGridSize = 1; //Set to 1 for full grid size.
+
+	private Camera mainCam; //The Camera used for the effect.
+	private Material material; //The Shader Material.
+
+	//Links into the shader(s) functions.
+	private const int PASS_MAIN = 0;
+	private const int PASS_DOWNSAMPLE = 1;
+	private const int PASS_UPDATE = 2;
+	private const int PASS_PREPARE = 3;
+
+	//Our Luminance render texture buffer.
+	private RenderTexture luminanceBuff;
+
+	void Start()
+	{
+		//Get the main Camera.
+		mainCam = this.GetComponent<Camera>();
+		mainCam.depthTextureMode |= DepthTextureMode.DepthNormals;
+		//Create the Material w/shader attached.
+		material = new Material(Shader);
+	}
+
+	//Swaps the image effect from HDR to LDR mode.
+	[ImageEffectTransformsToLDR]
+	void OnRenderImage(RenderTexture rtSource, RenderTexture rtDestination)
+	{
+		//Set the render Tex format to AlphaRedGreenBlueFloat.
+		RenderTextureFormat renderTexFormat = RenderTextureFormat.ARGBFloat;
+
+		//luminanceBuffer = new texture the size of screen.
+		if (luminanceBuff == null)
+		{
+			luminanceBuff = new RenderTexture(luminanceGridSize, luminanceGridSize, 0, renderTexFormat, RenderTextureReadWrite.Default);
+		}
+
+		//Set currentTexture to get temporary texture.
+		RenderTexture currentTex = RenderTexture.GetTemporary(initSampling, initSampling, 0, renderTexFormat, RenderTextureReadWrite.Default);
+		Graphics.Blit(rtSource, currentTex, material, PASS_PREPARE);
+
+		int currentSize = initSampling;
+
+		while (currentSize > luminanceGridSize)
+		{
+			RenderTexture next = RenderTexture.GetTemporary(currentSize / 2, currentSize / 2, 0, renderTexFormat, RenderTextureReadWrite.Default);
+			
+			//call to shader's downsample function.
+			Graphics.Blit(currentTex, next, material, PASS_DOWNSAMPLE);
+
+			//Release the current temp tex.
+			RenderTexture.ReleaseTemporary(currentTex);
+
+			//Progress through to downsample tex.
+			currentTex = next;
+			currentSize /= 2;
+		}
+
+		//Check if luminance Buffer is not created.
+		if (!luminanceBuff.IsCreated())
+		{
+			Debug.Log("Luminance unable to create. Recreating!");
+
+			//Try to create again.
+			luminanceBuff.Create();
+			Graphics.Blit(currentTex, luminanceBuff);
+		}
+		else
+		{
+			//Call to the shaders float _EyeAdaptation.
+			material.SetFloat("_EyeAdaptation", adaptationRate);
+
+			//Check if isEditor && if the application isn't playing (start effect).
+			if (Application.isEditor && !Application.isPlaying)
+			{
+				Graphics.Blit(currentTex, luminanceBuff);
+			}
+			else
+			{
+				//A call to shader's PASS_Update.
+				Graphics.Blit(currentTex, luminanceBuff, material, PASS_UPDATE);
+			}
+		}
+
+		//Used to communicate with Shader's values.
+		material.SetTexture("_LuminanceTex", luminanceBuff);
+		material.SetFloat("_Key", Key); //Used for brightness of the scene.
+		material.SetFloat("_WhiteColor", White);  //Set what the texture considers white.
+		material.SetFloat("_Max", maxLimit); //Changes the sensitivity of eye.
+
+		//Copies source texture into dest render texture w/ shader.
+		Graphics.Blit(rtSource, rtDestination, material, PASS_MAIN);
+		//Graphics.Blit (luminanceBuff, destination);
+
+		//Release the current temp tex again.
+		RenderTexture.ReleaseTemporary(currentTex);
+	}
+}
