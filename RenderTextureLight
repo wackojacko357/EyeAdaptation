@@ -1,0 +1,55 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class RenderTextureLight : MonoBehaviour
+{
+    //Our Render texture used to get pixel(s).
+    public RenderTexture lightCheckTexture;
+    public float lightLevel; //Calculate the level of light.
+    public int _light;  //Used to round the light level down.
+
+    void Update()
+    {
+        //Create a new render texture.
+        RenderTexture bufferTexture = RenderTexture.GetTemporary(lightCheckTexture.width,
+        lightCheckTexture.height, 0, RenderTextureFormat.Default, RenderTextureReadWrite.Linear);
+        Graphics.Blit(lightCheckTexture, bufferTexture);
+
+        //Set previous render texture.
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = bufferTexture;
+
+        //Create texture2d.
+        Texture2D buffer2DTexture = new Texture2D(lightCheckTexture.width, lightCheckTexture.height);
+        buffer2DTexture.ReadPixels(new Rect(0, 0, bufferTexture.width, bufferTexture.height), 0, 0);
+        buffer2DTexture.Apply();
+
+        //Realease and return.
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(bufferTexture);
+
+        //Get the pixels and delete (Stops memory leak).
+        Color32[] colors = buffer2DTexture.GetPixels32();
+        Destroy(buffer2DTexture);
+
+        //Init lightLevel to 0
+        lightLevel = 0;
+
+        //Loop through the colors to get the light level
+        for (int i = 0; i < colors.Length; i++)
+        {
+            lightLevel += (0.2126f * colors[i].r) + (0.7152f * colors[i].g) + (0.0722f * colors[i].b);
+        }
+        
+        //Get the value as close to 0.
+        lightLevel -= 259330;
+        lightLevel = lightLevel / colors.Length;
+
+        //Round it down to an int.
+        _light = Mathf.RoundToInt(lightLevel);
+
+        Debug.Log("Light level: " + lightLevel);
+
+    }
+}
